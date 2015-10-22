@@ -2,6 +2,12 @@
 import saito.objloader.*;
 OBJModel model;
 
+import processing.video.*;
+import ddf.minim.*;  
+Movie myMovie;
+Minim minim;  
+AudioPlayer playerMusic; 
+
 // 変数定義
 int PLAYER = 0, ENEMY = 1, EFFECT = 2;      // group定数(enum…)
 Player player = new Player(0, 0, 100, 10);  // プレイヤー
@@ -10,6 +16,9 @@ ArrayList bulletList = new ArrayList();     // 弾リスト
 ArrayList effectList = new ArrayList();     // エフェクトリスト
 float cameraShake = 0.0;                    // 現在のカメラの揺れ具合
 int clearMillis = 0;                        // クリアタイム
+int counttime=0;                            // 
+int STAGE = 0;
+
 
 // 3D空間に配置する基本オブジェクトクラス
 class Chara {
@@ -137,12 +146,17 @@ class Effect extends Chara  {
 
 // 初期化
 void setup() {
-  size(640, 480, P3D);
+  size(1050, 600, P3D);
+  frameRate(60);
   // OBJファイルの読み込み
   model = new OBJModel(this, "Fighter SF2 N300707.obj");
   model.enableDebug();
   // 座標保存
   model.scale(0.5);
+  
+  minim = new Minim(this); //initialize
+  myMovie = new Movie(this, "StarWarsTelop.mov");
+  playerMusic = minim.loadFile("MainTheme.mp3");
   
   fighterList.add(player);
   for(int i=0; i<10; i++) {
@@ -153,8 +167,22 @@ void setup() {
 
 // 毎フレームの進行と描画
 void draw(){
-  background(0);
-
+  if (STAGE == 0) {
+    myMovie.loop();
+    tint(255, 30);
+    image(myMovie, 0, 0);
+    textAlign(CENTER, BOTTOM);
+    text("Click Bottan and Start",525,500);
+    counttime++;
+    if(counttime>360){
+      playerMusic.play();
+    }
+    if(counttime>3480){
+      noLoop();
+      STAGE = 1;    
+    }
+  } else {
+   background(0);
   // 宇宙背景、塵
   setLights();
   setPlayerCamera();
@@ -220,6 +248,8 @@ void draw(){
 
   input();
   cameraShake *= 0.95;
+  
+  }
 }
 
 // 毎フレームの入力
@@ -235,9 +265,21 @@ void input(){
   }
 }
 
+// Called every time a new frame is available to read
+void movieEvent(Movie m) {
+  m.read();
+}
+
 // マウスボタンを押した瞬間
 void mousePressed() {
-  if(player.life>0 && mouseButton==LEFT) player.shoot(30, 1);
+  if (STAGE == 0) {
+    myMovie.noLoop();      // press bottan and finish movie
+    playerMusic.close(); 
+    minim.stop();
+    STAGE = 1;        // new operation 
+  } else {
+    if(player.life>0 && mouseButton==LEFT) player.shoot(30, 1);
+  }
 }
 
 // 爆発エフェクトを追加
