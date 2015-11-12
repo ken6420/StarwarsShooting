@@ -18,7 +18,16 @@ float cameraShake = 0.0;                    // 現在のカメラの揺れ具合
 int clearMillis = 0;                        // クリアタイム
 int counttime=0;                            // 
 int STAGE = 0;
+PImage life1,force1;
 
+//muse
+import oscP5.*;
+import netP5.*;
+final int PORT = 5001;
+OscP5 oscP5 = new OscP5(this, PORT);
+float[] buffer_acc = new float[3];
+float[] buffer_alr = new float[4];
+float mX,mY;
 
 // 3D空間に配置する基本オブジェクトクラス
 class Chara {
@@ -52,7 +61,8 @@ class Chara {
     else return pos.dist(chara.pos) <= radius + chara.radius;
   }
   boolean damage(float _damage) {
-    life -= _damage;
+    life-=_damage;
+    
     return life<=0.0;
   }
   void draw() {
@@ -177,8 +187,11 @@ void draw(){
     if(counttime>360){
       playerMusic.play();
     }
-    if(counttime>3480){
-      noLoop();
+    if(counttime>3840){
+      myMovie.noLoop();
+      playerMusic.close(); 
+    minim.stop();
+      
       STAGE = 1;    
     }
   } else {
@@ -209,12 +222,23 @@ void draw(){
     for (int j=0;j<fighterList.size();j++) {
       Fighter fighter = (Fighter) fighterList.get(j);
       if(bullet.isHit(fighter)) {  // 弾が当たったらダメージ
-        if(fighter==player) cameraShake += bullet.power * 0.5;  // プレイヤーがダメージを受けた場合は大きめに揺らす
-        if(fighter.damage(bullet.power)) {
-          fighterList.remove(j--);      // ライフが尽きているので削除
-          addExplosionEffect(fighter);  // 爆発エフェクト
-          cameraShake += 1.0;           // カメラを少し揺らす
+        if(fighter==player){
+          cameraShake += bullet.power * 0.5;
+          if(fighter.damage(bullet.power/(0.7+buffer_alr[0]*9))) {
+            fighterList.remove(j--);      // ライフが尽きているので削除
+            addExplosionEffect(fighter);  // 爆発エフェクト
+            cameraShake += 1.0;           // カメラを少し揺らす
+          }
+        }else{
+           if(fighter.damage(bullet.power*buffer_alr[1]*5)) {
+              fighterList.remove(j--);      // ライフが尽きているので削除
+              addExplosionEffect(fighter);  // 爆発エフェクト
+              cameraShake += 1.0;           // カメラを少し揺らす
+            }
         }
+       
+        
+        
         bullet.life = 0;
         break;
       }
@@ -240,11 +264,41 @@ void draw(){
       text("" + enemyNum + " enemy" + (enemyNum>1 ? "s " : "" ), width/2, 30);
       textAlign(RIGHT, CENTER);
       text("life " + nf(player.life, 1, 0), width/3, height-30);
+      noTint();
+      if(player.life>90){
+        life1 = loadImage("life1.png");
+      }else if(player.life>75){
+        life1 = loadImage("life2.png");
+      }else if(player.life>60){
+        life1 = loadImage("life3.png");
+      }else if(player.life>45){
+        life1 = loadImage("life4.png");
+      }else if(player.life>30){
+        life1 = loadImage("life5.png");
+      }else{
+        life1 = loadImage("life6.png");
+      }
+      for(int i=0;i<21;i++){
+        if(buffer_alr[1] == 0.0) {
+          buffer_alr[1] = 0.3;
+        }
+        if(buffer_alr[1]>i*0.025){
+          force1=loadImage("force"+(20-i)+".png");
+        }
+      }
+      image(life1, 10, 30);
+      image(force1, 10, 60);
       rectMode(CORNER);
       noStroke();
       rect(20+width/3, height-34, map(player.life, 0, 100, 0, width/3), 5);
     }
-  } else text("GAME OVER", width/2, height/2);
+  } else {
+    textSize(40);
+    text("GAME OVER", width/2, height/2);
+  }
+
+  //レーダー
+  drawRadar();
 
   input();
   cameraShake *= 0.95;
@@ -254,16 +308,24 @@ void draw(){
 
 // 毎フレームの入力
 void input(){
-  if(mouseX>0 && mouseX<width && mouseY>0 && mouseY<height) {
-    float rotYLevel = map(mouseX, 0, width, -1, 1);
-    float rotXLevel = map(mouseY, 0, height, -1, 1);
-    player.roll(rotXLevel * abs(rotXLevel) * 3.0, -rotYLevel * abs(rotYLevel) * 3.0, 0.0f);
-  }
+mX=buffer_acc[2]/2+415;  
+mY=buffer_acc[0]/2+360;
+if(mX>width){mX=width-1;}
+if(mX<0){mX=1;}
+if(mY>height){mY=height-1;}
+if(mY<0){mY=1;}
+if(mX>0 && mY>0){ 
+float rotYLevel = map(mX, 0, width, -1, 1);  
+float rotXLevel = map(mY, 0, height, -1, 1);  
+player.roll(rotXLevel * abs(rotXLevel) * 3.0, -rotYLevel * abs(rotYLevel) * 3.0, 0.0f);  
+}
+
   if(player.life>0) {
     if((keyPressed && key==' ') || (mousePressed && mouseButton==RIGHT)) player.accel(0.04);
     else player.vel.mult(0.98);
   }
 }
+
 
 // Called every time a new frame is available to read
 void movieEvent(Movie m) {
@@ -278,7 +340,7 @@ void mousePressed() {
     minim.stop();
     STAGE = 1;        // new operation 
   } else {
-    if(player.life>0 && mouseButton==LEFT) player.shoot(30, 1);
+    if(player.life>0 && mouseButton==LEFT) player.shoot(100, 1);
   }
 }
 
@@ -350,9 +412,50 @@ void drawStars() {
   sphere(20000);
   popMatrix();
   
-  pushMatrix();
-  translate(width/2, height/2, -200);
-  rotateY(radians(60));
-  box(150, 150, 150);
-  popMatrix();
+}
+void oscEvent(OscMessage msg){
+  float data1;
+  if(msg.checkAddrPattern("/muse/acc")){
+    for(int ch = 0; ch < 3; ch++){
+      data1 = msg.get(ch).floatValue();
+      buffer_acc[ch] = data1;
+    }
+  }
+  float data2;
+  if(msg.checkAddrPattern("/muse/elements/alpha_relative")){
+    for(int ch = 0; ch < 4; ch++){
+      data2 = msg.get(ch).floatValue();
+      buffer_alr[ch] = data2;
+    }
+  }
+}
+
+//レーダーの描画
+void drawRadar() {
+  float radius = 20;
+  for (int i=0; i<6; i++) {
+    noFill();
+    strokeWeight(1.5);
+    stroke(255, 0, 0, 128);
+    ellipse(width-140,height-120,radius*2,radius*2);
+    radius += 15;
+  }
+  fill(255, 0, 0, 128);
+  triangle(width-140,height-125,width-143,height-115,width-137,height-115);
+  float x = player.pos.x;
+  float y = player.pos.y;
+  float z = player.pos.z;
+  for (int i=1;i<fighterList.size();i++) {
+    Fighter fighter = (Fighter) fighterList.get(i);
+    stroke(128, 0, 255, 128);
+    fill(128, 0, 255, 128);
+    float fx = fighter.pos.x;
+    float fy = fighter.pos.y;
+    float fz = fighter.pos.z;
+    float dx = (fx-x)*player.matrix.m00 + (fy-y)*player.matrix.m10 + (fz-z)*player.matrix.m20;
+    float dz = (fx-x)*player.matrix.m02 + (fy-y)*player.matrix.m12 + (fz-z)*player.matrix.m22;
+    float a = map(dx, 10000, -10000, width-50, width-230);
+    float b = map(dz, 10000, -10000, height-30, height-210);
+    ellipse(a, b, 5, 5);
+  }
 }
